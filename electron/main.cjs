@@ -11,6 +11,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
+    useContentSize: true,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     backgroundColor: "#071017",

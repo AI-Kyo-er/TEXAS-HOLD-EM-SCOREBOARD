@@ -79,6 +79,11 @@ const DESIGN_HEIGHT = 810;
 const GAMES_PER_PAGE = 8;
 const AVATAR_STYLES = ["croodles", "lorelei-neutral", "notionists"];
 
+function getViewportScale() {
+  if (typeof window === "undefined") return 1;
+  return Math.min(window.innerWidth / DESIGN_WIDTH, window.innerHeight / DESIGN_HEIGHT);
+}
+
 const demoPlayers: Player[] = [
   makePlayer("p-tony", "Tony", "10001", 1),
   makePlayer("p-jason", "Jason", "10002", 2),
@@ -220,7 +225,7 @@ function loadStore(): Store {
 
 function App() {
   const [store, setStore] = useState<Store>(loadStore);
-  const [viewportScale, setViewportScale] = useState(1);
+  const [viewportScale, setViewportScale] = useState(getViewportScale);
   const [activeView, setActiveView] = useState<"games" | "players">("games");
   const [expandedGameId, setExpandedGameId] = useState(store.games[0]?.id ?? "");
   const [selectedPlayerId, setSelectedPlayerId] = useState(store.players[0]?.id ?? "");
@@ -240,7 +245,7 @@ function App() {
 
   useEffect(() => {
     const updateScale = () => {
-      setViewportScale(Math.min(window.innerWidth / DESIGN_WIDTH, window.innerHeight / DESIGN_HEIGHT));
+      setViewportScale(getViewportScale());
     };
 
     updateScale();
