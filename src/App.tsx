@@ -71,6 +71,8 @@ const STORAGE_KEY = "poker-tracker-store-v1";
 const green = "#36e24f";
 const red = "#ff3148";
 const neutral = "#97a3ad";
+const DESIGN_WIDTH = 1440;
+const DESIGN_HEIGHT = 810;
 
 const demoPlayers: Player[] = [
   makePlayer("p-tony", "Tony", "10001", 1),
@@ -188,6 +190,7 @@ function loadStore(): Store {
 
 function App() {
   const [store, setStore] = useState<Store>(loadStore);
+  const [viewportScale, setViewportScale] = useState(1);
   const [expandedGameId, setExpandedGameId] = useState(store.games[0]?.id ?? "");
   const [selectedPlayerId, setSelectedPlayerId] = useState(store.players[0]?.id ?? "");
   const [searchTerm, setSearchTerm] = useState("");
@@ -202,6 +205,16 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   }, [store]);
+
+  useEffect(() => {
+    const updateScale = () => {
+      setViewportScale(Math.min(window.innerWidth / DESIGN_WIDTH, window.innerHeight / DESIGN_HEIGHT));
+    };
+
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   const games = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -328,8 +341,17 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className="scale-viewport">
+      <div
+        className="scale-stage"
+        style={{
+          width: DESIGN_WIDTH,
+          height: DESIGN_HEIGHT,
+          transform: `scale(${viewportScale})`
+        }}
+      >
+        <div className="app-shell">
+          <aside className="sidebar">
         <div className="brand">
           <div className="brand-title">
             P<span className="spade">♠</span>KER
@@ -357,9 +379,9 @@ function App() {
           <Settings size={24} />
           设置
         </button>
-      </aside>
+          </aside>
 
-      <main className="main-panel">
+          <main className="main-panel">
         <header className="page-header">
           <div>
             <h1>牌局记录</h1>
@@ -555,9 +577,9 @@ function App() {
             <ChevronRight size={19} />
           </footer>
         </section>
-      </main>
+          </main>
 
-      <aside className="stats-panel">
+          <aside className="stats-panel">
         <section className="stats-card player-card">
           <div className="panel-title">
             <h2>玩家统计</h2>
@@ -680,7 +702,9 @@ function App() {
             </div>
           </div>
         </section>
-      </aside>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }
