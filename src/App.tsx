@@ -14,7 +14,8 @@ import {
   SlidersHorizontal,
   Trash2,
   Trophy,
-  UsersRound
+  UsersRound,
+  X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -676,12 +677,20 @@ function App() {
           <div className="brand-subtitle">TRACKER</div>
         </div>
 
-        <button className="new-game-button" onClick={() => {
-          setActiveView("games");
-          setShowComposer(true);
-        }}>
-          <Plus size={22} />
-          新牌局
+        <button
+          className={`new-game-button ${activeView === "games" && showComposer ? "cancel" : ""}`}
+          onClick={() => {
+            if (activeView === "games" && showComposer) {
+              setShowComposer(false);
+              setManageTags(false);
+              return;
+            }
+            setActiveView("games");
+            setShowComposer(true);
+          }}
+        >
+          {activeView === "games" && showComposer ? <X size={22} /> : <Plus size={22} />}
+          {activeView === "games" && showComposer ? "取消" : "新牌局"}
         </button>
 
         <nav className="nav-list">
@@ -806,9 +815,6 @@ function App() {
                 <h2>新牌局</h2>
                 <p>选择入局玩家，系统会自动记录每人 {store.settings.initialBuyInBB} BB 初始买入。</p>
               </div>
-              <button className="ghost-button" onClick={() => setShowComposer(false)}>
-                收起
-              </button>
             </div>
 
             <div className="tag-composer">

@@ -127,6 +127,11 @@ button {
   font-weight: 800;
 }
 
+.new-game-button.cancel {
+  background: linear-gradient(180deg, #ff5b6a, #d92d3b);
+  box-shadow: 0 12px 28px rgba(217, 45, 59, 0.24);
+}
+
 .nav-list {
   display: grid;
   gap: 12px;
