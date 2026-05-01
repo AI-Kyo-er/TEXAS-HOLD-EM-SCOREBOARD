@@ -14,6 +14,7 @@ function createWindow() {
     useContentSize: true,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
+    maximizable: false,
     backgroundColor: "#071017",
     title: "Poker Tracker",
     autoHideMenuBar: true,
@@ -33,11 +34,11 @@ function createWindow() {
   win.on("resize", () => {
     if (win.isMaximized() || win.isFullScreen()) return;
 
-    const [width, height] = win.getSize();
+    const [width, height] = win.getContentSize();
     const expectedHeight = Math.round(width / ASPECT_RATIO);
     if (Math.abs(expectedHeight - height) <= 1) return;
 
-    win.setSize(width, Math.max(MIN_HEIGHT, expectedHeight));
+    win.setContentSize(width, Math.max(MIN_HEIGHT, expectedHeight));
   });
 
   win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
