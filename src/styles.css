@@ -14,6 +14,7 @@
   --green: #36e24f;
   --green-soft: rgba(54, 226, 79, 0.16);
   --red: #ff3148;
+  --titlebar-height: 40px;
   font-size: 15px;
 }
 
@@ -49,9 +50,62 @@ button {
   border: 0;
 }
 
+.app-frame {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.window-titlebar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--titlebar-height);
+  padding-left: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #dce5ed;
+  background: rgba(17, 28, 36, 0.96);
+  -webkit-app-region: drag;
+}
+
+.window-titlebar-brand {
+  color: #dce5ed;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  -webkit-app-region: no-drag;
+}
+
+.window-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  color: #c9d3db;
+  background: transparent;
+  cursor: pointer;
+}
+
+.window-control:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.window-control.close:hover {
+  background: #d9281f;
+}
+
 .scale-viewport {
   position: fixed;
-  inset: 0;
+  inset: var(--titlebar-height) 0 0;
   display: flex;
   align-items: center;
   justify-content: flex-start;

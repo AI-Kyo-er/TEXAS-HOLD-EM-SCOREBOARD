@@ -8,6 +8,7 @@ import {
   CircleUserRound,
   RefreshCw,
   LayoutList,
+  Minus,
   Plus,
   Search,
   Settings,
@@ -30,6 +31,15 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+
+declare global {
+  interface Window {
+    pokerWindow?: {
+      minimize: () => void;
+      close: () => void;
+    };
+  }
+}
 
 type Player = {
   id: string;
@@ -88,6 +98,7 @@ const red = "#ff3148";
 const neutral = "#97a3ad";
 const DESIGN_WIDTH = 1440;
 const DESIGN_HEIGHT = 810;
+const TITLEBAR_HEIGHT = 40;
 const GAMES_PER_PAGE = 8;
 const CASH_PER_BB = 2000;
 const DEFAULT_SETTINGS: AppSettings = {
@@ -107,7 +118,7 @@ const TIME_FILTER_LABELS = Object.fromEntries(
 
 function getViewportScale() {
   if (typeof window === "undefined") return 1;
-  return Math.min(window.innerWidth / DESIGN_WIDTH, window.innerHeight / DESIGN_HEIGHT);
+  return Math.min(window.innerWidth / DESIGN_WIDTH, (window.innerHeight - TITLEBAR_HEIGHT) / DESIGN_HEIGHT);
 }
 
 const demoPlayers: Player[] = [
@@ -659,7 +670,27 @@ function App() {
   }
 
   return (
-    <div className="scale-viewport">
+    <div className="app-frame">
+      <header className="window-titlebar">
+        <div className="window-titlebar-brand">Poker Tracker</div>
+        <div className="window-controls">
+          <button
+            className="window-control"
+            aria-label="最小化"
+            onClick={() => window.pokerWindow?.minimize()}
+          >
+            <Minus size={15} />
+          </button>
+          <button
+            className="window-control close"
+            aria-label="关闭"
+            onClick={() => window.pokerWindow?.close()}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      </header>
+      <div className="scale-viewport">
       <div
         className="scale-stage"
         style={{
@@ -1299,6 +1330,7 @@ function App() {
           </aside>
         </div>
       </div>
+    </div>
     </div>
   );
 }
