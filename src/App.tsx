@@ -7,7 +7,6 @@ import {
   ChevronUp,
   CircleUserRound,
   RefreshCw,
-  Filter,
   Grid2X2,
   LayoutList,
   Plus,
@@ -63,6 +62,7 @@ type Game = {
   durationMinutes: number;
   note: string;
   entries: GameEntry[];
+  hiddenAt?: string;
 };
 
 type Store = {
@@ -227,7 +227,7 @@ function App() {
   const [store, setStore] = useState<Store>(loadStore);
   const [viewportScale, setViewportScale] = useState(getViewportScale);
   const [activeView, setActiveView] = useState<"games" | "players">("games");
-  const [expandedGameId, setExpandedGameId] = useState(store.games[0]?.id ?? "");
+  const [expandedGameId, setExpandedGameId] = useState(store.games.find((game) => !game.hiddenAt)?.id ?? "");
   const [selectedPlayerId, setSelectedPlayerId] = useState(store.players[0]?.id ?? "");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -238,6 +238,9 @@ function App() {
   const [durationMinutes, setDurationMinutes] = useState("45");
   const [selectedIds, setSelectedIds] = useState<string[]>(store.players.slice(0, 6).map((player) => player.id));
   const [range, setRange] = useState<"all" | "30" | "90" | "custom">("all");
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
+  const [confirmHideGames, setConfirmHideGames] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
@@ -253,12 +256,14 @@ function App() {
     return () => window.removeEventListener("resize", updateScale);
   }, []);
 
+  const activeGames = useMemo(() => store.games.filter((game) => !game.hiddenAt), [store.games]);
+
   const games = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return store.games
+    return activeGames
       .filter((game) => !q || game.id.toLowerCase().includes(q) || game.note.toLowerCase().includes(q))
       .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  }, [store.games, searchTerm]);
+  }, [activeGames, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(games.length / GAMES_PER_PAGE));
   const currentPageGames = useMemo(() => {
@@ -274,15 +279,26 @@ function App() {
   const selectedPlayer = store.players.find((player) => player.id === selectedPlayerId) ?? store.players[0];
 
   const playerStats = useMemo(() => {
-    return buildPlayerStats(store.games, selectedPlayer?.id ?? "", range);
-  }, [store.games, selectedPlayer?.id, range]);
+    return buildPlayerStats(activeGames, selectedPlayer?.id ?? "", range);
+  }, [activeGames, selectedPlayer?.id, range]);
 
-  const distribution = useMemo(() => buildDistribution(store.games), [store.games]);
+  const distribution = useMemo(() => buildDistribution(activeGames), [activeGames]);
   const playerById = useMemo(() => new Map(store.players.map((player) => [player.id, player])), [store.players]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  useEffect(() => {
+    setConfirmHideGames(false);
+  }, [searchTerm, currentPage]);
+
+  useEffect(() => {
+    if (activeView === "games") return;
+    setDeleteMode(false);
+    setSelectedGameIds([]);
+    setConfirmHideGames(false);
+  }, [activeView]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, totalPages));
@@ -344,7 +360,7 @@ function App() {
   }
 
   function getPlayerUsage(playerId: string) {
-    return store.games.reduce(
+    return activeGames.reduce(
       (usage, game) => {
         const entry = game.entries.find((item) => item.playerId === playerId);
         if (!entry) return usage;
@@ -451,6 +467,43 @@ function App() {
     });
   }
 
+  function enterDeleteMode() {
+    setDeleteMode(true);
+    setExpandedGameId("");
+    setSelectedGameIds([]);
+    setConfirmHideGames(false);
+  }
+
+  function cancelDeleteMode() {
+    setDeleteMode(false);
+    setSelectedGameIds([]);
+    setConfirmHideGames(false);
+  }
+
+  function toggleGameSelection(gameId: string) {
+    setSelectedGameIds((current) =>
+      current.includes(gameId) ? current.filter((id) => id !== gameId) : [...current, gameId]
+    );
+    setConfirmHideGames(false);
+  }
+
+  function hideSelectedGames() {
+    if (selectedGameIds.length === 0) return;
+
+    if (!confirmHideGames) {
+      setConfirmHideGames(true);
+      return;
+    }
+
+    const hiddenAt = new Date().toISOString();
+    const selected = new Set(selectedGameIds);
+    commitStore({
+      ...store,
+      games: store.games.map((game) => (selected.has(game.id) ? { ...game, hiddenAt } : game))
+    });
+    cancelDeleteMode();
+  }
+
   function toggleSelected(id: string) {
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -526,23 +579,30 @@ function App() {
             <ChevronDown size={17} />
           </button>
           <button className="filter-pill">
-            <Grid2X2 size={19} />
-            所有游戏
-            <ChevronDown size={17} />
-          </button>
-          <button className="filter-pill">
             <SlidersHorizontal size={19} />
-            所有备注
+            所有标签
             <ChevronDown size={17} />
           </button>
           <div className="toolbar-spacer" />
-          <button className="filter-pill compact">
-            最新在前
-            <ChevronDown size={17} />
-          </button>
-          <button className="icon-button">
-            <Filter size={21} />
-          </button>
+          {deleteMode ? (
+            <>
+              <button className="ghost-button delete-cancel-button" onClick={cancelDeleteMode}>
+                取消
+              </button>
+              <button
+                className={`danger-button delete-confirm-button ${confirmHideGames ? "confirming" : ""}`}
+                disabled={selectedGameIds.length === 0}
+                onClick={hideSelectedGames}
+              >
+                <Trash2 size={16} />
+                {confirmHideGames ? "确认" : `删除 ${selectedGameIds.length} 项`}
+              </button>
+            </>
+          ) : (
+            <button className="danger-button delete-mode-button" onClick={enterDeleteMode}>
+              <Trash2 size={16} />
+            </button>
+          )}
         </section>
 
         {showComposer ? (
@@ -622,15 +682,23 @@ function App() {
             <span>时长</span>
             <span>玩家数</span>
             <span>备注</span>
-            <span>操作</span>
+            <span>{deleteMode ? "选择" : "操作"}</span>
           </div>
 
           <div className={`game-list ${hasExpandedVisibleGame ? "has-expanded" : ""}`}>
-            {visibleGames.map((game) => (
-              <article key={game.id} className="game-row">
+            {visibleGames.map((game) => {
+              const selectedForHide = selectedGameIds.includes(game.id);
+              return (
+              <article key={game.id} className={`game-row ${selectedForHide ? "selected-for-hide" : ""}`}>
               <button
-                className="summary-row"
-                onClick={() => setExpandedGameId(expandedGameId === game.id ? "" : game.id)}
+                className={`summary-row ${deleteMode ? "selection-row" : ""}`}
+                onClick={() => {
+                  if (deleteMode) {
+                    toggleGameSelection(game.id);
+                    return;
+                  }
+                  setExpandedGameId(expandedGameId === game.id ? "" : game.id);
+                }}
               >
                 <span className="game-id">{game.id}</span>
                 <span>{formatDateTime(game.startedAt)}</span>
@@ -638,11 +706,17 @@ function App() {
                 <span>{game.entries.length}</span>
                 <span>{game.note}</span>
                 <span className="row-action">
-                  {expandedGameId === game.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  {deleteMode ? (
+                    <span className={`row-checkbox ${selectedForHide ? "checked" : ""}`} aria-hidden="true" />
+                  ) : expandedGameId === game.id ? (
+                    <ChevronUp size={20} />
+                  ) : (
+                    <ChevronDown size={20} />
+                  )}
                 </span>
               </button>
 
-              {expandedGameId === game.id ? (
+              {!deleteMode && expandedGameId === game.id ? (
                 <div className="details-table">
                   <div className="details-head">
                     <span>玩家</span>
@@ -689,7 +763,8 @@ function App() {
                 </div>
               ) : null}
               </article>
-            ))}
+            );
+            })}
 
             {visibleGames.length === 0 ? <div className="empty-row">暂无匹配牌局</div> : null}
           </div>
@@ -774,7 +849,7 @@ function App() {
                       <button
                         className="danger-button"
                         disabled={!canDelete}
-                        title={canDelete ? "删除玩家" : "已有历史牌局的玩家不能删除"}
+                        title={canDelete ? "删除玩家" : "仍有可见牌局记录的玩家不能删除"}
                         onClick={() => deletePlayer(player.id)}
                       >
                         <Trash2 size={16} />

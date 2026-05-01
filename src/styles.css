@@ -478,6 +478,28 @@ button {
   cursor: default;
 }
 
+.delete-mode-button,
+.delete-cancel-button,
+.delete-confirm-button {
+  height: 40px;
+  white-space: nowrap;
+}
+
+.delete-confirm-button {
+  min-width: 132px;
+}
+
+.delete-mode-button {
+  width: 44px;
+  padding: 0;
+}
+
+.delete-confirm-button.confirming {
+  color: #fff2f4;
+  border-color: rgba(255, 49, 72, 0.48);
+  background: rgba(255, 49, 72, 0.2);
+}
+
 .games-table {
   height: 578px;
   display: grid;
@@ -552,6 +574,15 @@ button {
   background: rgba(255, 255, 255, 0.025);
 }
 
+.summary-row.selection-row {
+  cursor: pointer;
+}
+
+.game-row.selected-for-hide .summary-row,
+.summary-row.selection-row:hover {
+  background: rgba(255, 49, 72, 0.075);
+}
+
 .game-id {
   color: var(--green);
   font-weight: 800;
@@ -560,6 +591,32 @@ button {
 .row-action {
   display: flex;
   justify-content: center;
+}
+
+.row-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(216, 224, 232, 0.42);
+  border-radius: 6px;
+  background: rgba(4, 12, 18, 0.5);
+}
+
+.row-checkbox.checked {
+  border-color: rgba(255, 49, 72, 0.72);
+  background: rgba(255, 49, 72, 0.18);
+}
+
+.row-checkbox.checked::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid #fff2f4;
+  border-bottom: 2px solid #fff2f4;
+  transform: rotate(-45deg) translate(1px, -1px);
 }
 
 .details-table {
