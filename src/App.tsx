@@ -486,7 +486,7 @@ function App() {
           </button>
           <button className={`nav-item ${activeView === "players" ? "active" : ""}`} onClick={() => setActiveView("players")}>
             <CircleUserRound size={22} />
-            玩家
+            玩家管理
           </button>
         </nav>
 
@@ -499,7 +499,7 @@ function App() {
           <main className="main-panel">
         {activeView === "games" ? (
           <>
-        <header className="page-header">
+        <header className="page-header games-header">
           <div>
             <h1>牌局记录</h1>
             <p>查看和管理所有牌局的结算结果</p>
@@ -727,7 +727,7 @@ function App() {
                 <h1>玩家管理</h1>
                 <p>管理玩家姓名和头像</p>
               </div>
-              <div className="players-add-inline">
+              <label className="players-add-inline">
                 <input
                   value={newPlayerName}
                   onChange={(event) => setNewPlayerName(event.target.value)}
@@ -737,9 +737,9 @@ function App() {
                   placeholder="添加新玩家姓名"
                 />
                 <button className="primary-button" onClick={addPlayer}>
-                  添加玩家
+                  添加
                 </button>
-              </div>
+              </label>
             </header>
 
             <div className="players-management-grid">

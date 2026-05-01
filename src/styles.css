@@ -365,17 +365,22 @@ button {
   overflow: hidden;
 }
 
+.games-header,
 .players-header {
   align-items: center;
 }
 
 .players-add-inline {
-  display: grid;
-  grid-template-columns: 230px 118px;
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  width: min(300px, 100%);
+  height: 48px;
+  padding: 0 4px 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(13, 24, 33, 0.76);
 }
 
-.players-add-inline input,
 .management-fields input {
   height: 40px;
   min-width: 0;
@@ -387,7 +392,18 @@ button {
 }
 
 .players-add-inline input {
-  padding: 0 12px;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #e7eef4;
+  background: transparent;
+}
+
+.players-add-inline .primary-button {
+  flex: 0 0 74px;
+  min-height: 40px;
+  padding: 0 14px;
 }
 
 .players-management-grid {
