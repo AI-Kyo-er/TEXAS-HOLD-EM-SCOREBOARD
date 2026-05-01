@@ -374,6 +374,12 @@ button {
 
 .game-list.has-expanded {
   display: block;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.game-list.has-expanded::-webkit-scrollbar {
+  display: none;
 }
 
 .game-row {

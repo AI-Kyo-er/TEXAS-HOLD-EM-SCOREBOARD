@@ -231,13 +231,8 @@ function App() {
     return games.slice(start, start + GAMES_PER_PAGE);
   }, [currentPage, games]);
   const visibleGames = useMemo(() => {
-    const expandedIndex = currentPageGames.findIndex((game) => game.id === expandedGameId);
-    if (expandedIndex === -1) {
-      return currentPageGames;
-    }
-
-    return currentPageGames.slice(expandedIndex, expandedIndex + 3);
-  }, [currentPageGames, expandedGameId]);
+    return currentPageGames;
+  }, [currentPageGames]);
   const hasExpandedVisibleGame = visibleGames.some((game) => game.id === expandedGameId);
   const paginationItems = useMemo(() => getPaginationItems(currentPage, totalPages), [currentPage, totalPages]);
 
