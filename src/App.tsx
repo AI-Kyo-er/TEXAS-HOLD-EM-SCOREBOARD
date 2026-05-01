@@ -672,8 +672,8 @@ function App() {
                 <PieChart>
                   <Pie
                     data={distribution.rows}
-                    innerRadius={43}
-                    outerRadius={62}
+                    innerRadius={28}
+                    outerRadius={42}
                     dataKey="value"
                     stroke="rgba(7,14,20,.8)"
                     strokeWidth={2}

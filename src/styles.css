@@ -558,15 +558,22 @@ button {
 
 .stats-panel {
   display: grid;
+  grid-template-rows: 392px 198px 160px;
   align-content: start;
-  gap: 12px;
+  gap: 10px;
   height: 810px;
-  padding: 24px 0 28px;
+  padding: 20px 0;
   overflow: hidden;
 }
 
 .stats-card {
-  padding: 16px;
+  min-height: 0;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.player-card {
+  padding-bottom: 12px;
 }
 
 .select-wrap {
@@ -598,7 +605,12 @@ button {
 }
 
 .profile-line {
-  margin-top: 12px;
+  margin-top: 10px;
+}
+
+.profile-line .avatar.large {
+  width: 48px;
+  height: 48px;
 }
 
 .profile-line strong {
@@ -617,14 +629,14 @@ button {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 4px;
-  margin: 18px 0 14px;
+  margin: 10px 0 8px;
   padding: 4px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.045);
 }
 
 .range-tabs button {
-  min-height: 36px;
+  min-height: 32px;
   border-radius: 7px;
   color: #9faab4;
   background: transparent;
@@ -639,14 +651,15 @@ button {
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(4, 50px);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   overflow: hidden;
 }
 
 .stat-item {
-  min-height: 68px;
-  padding: 12px 14px;
+  min-height: 0;
+  padding: 7px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.055);
 }
 
@@ -661,14 +674,14 @@ button {
 .stat-item span {
   display: block;
   color: #8d98a1;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .stat-item strong {
   display: block;
-  margin-top: 8px;
+  margin-top: 4px;
   color: #eef5fb;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .stat-item strong.profit {
@@ -680,29 +693,29 @@ button {
 }
 
 .chart-card {
-  min-height: 220px;
+  min-height: 0;
 }
 
 .chart-wrap {
-  height: 160px;
-  margin-top: 14px;
+  height: 122px;
+  margin-top: 8px;
 }
 
 .donut-card {
-  min-height: 204px;
+  min-height: 0;
 }
 
 .donut-layout {
   display: grid;
-  grid-template-columns: 132px 1fr;
-  gap: 12px;
+  grid-template-columns: 82px 1fr;
+  gap: 10px;
   align-items: center;
-  margin-top: 14px;
+  margin-top: 6px;
 }
 
 .donut-wrap {
   position: relative;
-  height: 132px;
+  height: 82px;
 }
 
 .donut-center {
@@ -717,17 +730,17 @@ button {
 
 .donut-center strong {
   color: white;
-  font-size: 23px;
+  font-size: 18px;
 }
 
 .donut-center span {
   color: #a1acb5;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .legend {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .legend div {
