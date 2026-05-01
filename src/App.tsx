@@ -347,7 +347,7 @@ function App() {
         style={{
           width: DESIGN_WIDTH,
           height: DESIGN_HEIGHT,
-          transform: `scale(${viewportScale})`
+          zoom: viewportScale
         }}
       >
         <div className="app-shell">
