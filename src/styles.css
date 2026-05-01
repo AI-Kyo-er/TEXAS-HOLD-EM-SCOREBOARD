@@ -154,7 +154,8 @@ button {
   background: rgba(50, 205, 71, 0.12);
 }
 
-.nav-item.active svg {
+.nav-item.active svg,
+.settings-button.active svg {
   color: var(--green);
 }
 
@@ -163,6 +164,12 @@ button {
   width: 100%;
   background: rgba(255, 255, 255, 0.04);
   cursor: pointer;
+}
+
+.settings-button.active {
+  border: 1px solid rgba(69, 241, 93, 0.18);
+  color: #f1f7f4;
+  background: rgba(50, 205, 71, 0.12);
 }
 
 .main-panel {
@@ -443,6 +450,25 @@ button {
   cursor: pointer;
 }
 
+.tag-inline-input {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 112px;
+  max-width: 220px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  appearance: none;
+  outline: 0;
+  color: #e7eef4;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+  line-height: 32px;
+}
+
 .tag-picker,
 .tag-list {
   display: flex;
@@ -536,6 +562,17 @@ button {
   background: transparent;
 }
 
+.composer .tag-inline-input {
+  flex: 0 0 auto;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  line-height: 32px;
+}
+
 .player-picker {
   display: flex;
   flex-wrap: wrap;
@@ -582,8 +619,76 @@ button {
 }
 
 .games-header,
-.players-header {
+.players-header,
+.settings-header {
   align-items: center;
+}
+
+.settings-view {
+  height: 760px;
+  overflow: hidden;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.settings-card {
+  display: grid;
+  gap: 20px;
+  min-height: 174px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(20, 34, 45, 0.84), rgba(12, 24, 33, 0.78));
+}
+
+.settings-card h2 {
+  margin: 0;
+  color: #f4fbff;
+  font-size: 18px;
+}
+
+.settings-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-field {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(6, 15, 22, 0.42);
+}
+
+.settings-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #e7eef4;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.settings-field span {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .players-add-inline {
@@ -848,7 +953,7 @@ button {
 
 .details-head,
 .details-row {
-  grid-template-columns: 1.04fr 0.85fr 1fr 0.9fr 1fr 0.74fr;
+  grid-template-columns: 1.04fr 0.78fr 1fr 0.88fr 0.86fr 0.78fr;
   min-width: 820px;
   padding: 0 24px;
 }
@@ -970,6 +1075,14 @@ button {
   padding: 0 5px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   text-align: right;
+}
+
+.cash-amount-input {
+  width: 84px;
+}
+
+.cash-bb-value {
+  white-space: nowrap;
 }
 
 .details-row em {

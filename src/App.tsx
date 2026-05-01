@@ -41,7 +41,7 @@ type Player = {
 
 type Rebuy = {
   id: string;
-  amountBB: 75 | 150;
+  amountBB: number;
   createdAt: string;
 };
 
@@ -50,8 +50,9 @@ type GameEntry = {
   playerName: string;
   playerCode: string;
   avatarSeed?: number | string;
-  initialBuyInBB: 150;
+  initialBuyInBB: number;
   rebuys: Rebuy[];
+  cashOutAmount?: number | "";
   cashOutBB: number | "";
 };
 
@@ -69,10 +70,16 @@ type Store = {
   players: Player[];
   games: Game[];
   tags: string[];
+  settings: AppSettings;
 };
 
 type TimeFilter = "today" | "week" | "month" | "all";
 type FilterMenu = "time" | "tags" | null;
+
+type AppSettings = {
+  initialBuyInBB: number;
+  rebuyOptionsBB: [number, number];
+};
 
 const STORAGE_KEY = "poker-tracker-store-v1";
 const green = "#36e24f";
@@ -81,6 +88,11 @@ const neutral = "#97a3ad";
 const DESIGN_WIDTH = 1440;
 const DESIGN_HEIGHT = 810;
 const GAMES_PER_PAGE = 8;
+const CASH_PER_BB = 2000;
+const DEFAULT_SETTINGS: AppSettings = {
+  initialBuyInBB: 150,
+  rebuyOptionsBB: [150, 75]
+};
 const AVATAR_STYLES = ["croodles", "lorelei-neutral", "notionists"];
 const TIME_FILTER_OPTIONS: Array<{ key: TimeFilter; label: string }> = [
   { key: "today", label: "今天" },
@@ -188,7 +200,7 @@ function makeDemoGame(
         cashOutBB,
         rebuys: rebuys.map(([amountBB, createdAt], index) => ({
           id: `${id}-${playerId}-${index}`,
-          amountBB: amountBB as 75 | 150,
+          amountBB,
           createdAt
         }))
       };
@@ -213,12 +225,13 @@ function normalizeTags(tags: unknown): string[] {
 
 function normalizeGame(game: Partial<Game> & { note?: string }, index: number): Game {
   const legacyTag = game.note && game.note !== "-" ? [game.note] : [];
+  const hasTagsField = Object.prototype.hasOwnProperty.call(game, "tags");
   return {
     id: game.id || `#${index + 1}`,
     startedAt: game.startedAt || new Date().toISOString(),
     durationMinutes: game.durationMinutes,
     note: game.note,
-    tags: normalizeTags(game.tags?.length ? game.tags : legacyTag),
+    tags: normalizeTags(hasTagsField ? game.tags : legacyTag),
     entries: Array.isArray(game.entries) ? game.entries : [],
     hiddenAt: game.hiddenAt
   };
@@ -226,6 +239,23 @@ function normalizeGame(game: Partial<Game> & { note?: string }, index: number): 
 
 function getStoreTags(games: Game[], tags?: unknown) {
   return normalizeTags([...(Array.isArray(tags) ? tags : []), ...games.flatMap((game) => game.tags)]);
+}
+
+function normalizeBBValue(value: unknown, fallback: number, allowZero = false) {
+  const numberValue = Number(value);
+  const min = allowZero ? 0 : 0.5;
+  if (!Number.isFinite(numberValue) || numberValue < min) return fallback;
+  return Math.round(numberValue * 2) / 2;
+}
+
+function normalizeSettings(settings?: Partial<AppSettings>): AppSettings {
+  return {
+    initialBuyInBB: normalizeBBValue(settings?.initialBuyInBB, DEFAULT_SETTINGS.initialBuyInBB),
+    rebuyOptionsBB: [
+      normalizeBBValue(settings?.rebuyOptionsBB?.[0], DEFAULT_SETTINGS.rebuyOptionsBB[0]),
+      normalizeBBValue(settings?.rebuyOptionsBB?.[1], DEFAULT_SETTINGS.rebuyOptionsBB[1])
+    ]
+  };
 }
 
 function normalizePlayer(player: Partial<Player> & { avatarSeed?: string | number }, index: number): Player {
@@ -250,7 +280,8 @@ function normalizeStore(store: Partial<Store> & { tags?: unknown }): Store {
   return {
     players,
     games,
-    tags: getStoreTags(games, store.tags)
+    tags: getStoreTags(games, store.tags),
+    settings: normalizeSettings(store.settings)
   };
 }
 
@@ -274,7 +305,7 @@ function loadStore(): Store {
 function App() {
   const [store, setStore] = useState<Store>(loadStore);
   const [viewportScale, setViewportScale] = useState(getViewportScale);
-  const [activeView, setActiveView] = useState<"games" | "players">("games");
+  const [activeView, setActiveView] = useState<"games" | "players" | "settings">("games");
   const [expandedGameId, setExpandedGameId] = useState(store.games.find((game) => !game.hiddenAt)?.id ?? "");
   const [selectedPlayerId, setSelectedPlayerId] = useState(store.players[0]?.id ?? "");
   const [searchTerm, setSearchTerm] = useState("");
@@ -340,7 +371,7 @@ function App() {
     return buildPlayerStats(games, selectedPlayer?.id ?? "", range);
   }, [games, selectedPlayer?.id, range]);
 
-  const distribution = useMemo(() => buildDistribution(games), [games]);
+  const distribution = useMemo(() => buildDistribution(games, selectedPlayer?.id ?? ""), [games, selectedPlayer?.id]);
   const playerById = useMemo(() => new Map(store.players.map((player) => [player.id, player])), [store.players]);
 
   useEffect(() => {
@@ -485,6 +516,27 @@ function App() {
     setSelectedFilterTags((current) => current.filter((item) => item !== tag));
   }
 
+  function updateSettingsField(field: "initialBuyInBB" | "rebuyOption0" | "rebuyOption1", value: string) {
+    const nextValue = normalizeBBValue(value, 0);
+    if (!nextValue) return;
+
+    const nextSettings: AppSettings =
+      field === "initialBuyInBB"
+        ? { ...store.settings, initialBuyInBB: nextValue }
+        : {
+            ...store.settings,
+            rebuyOptionsBB:
+              field === "rebuyOption0"
+                ? [nextValue, store.settings.rebuyOptionsBB[1]]
+                : [store.settings.rebuyOptionsBB[0], nextValue]
+          };
+
+    commitStore({
+      ...store,
+      settings: nextSettings
+    });
+  }
+
   function createGame() {
     const selectedPlayers = store.players.filter((player) => selectedIds.includes(player.id));
     if (selectedPlayers.length === 0) return;
@@ -499,7 +551,7 @@ function App() {
         playerName: player.name,
         playerCode: player.code,
         avatarSeed: player.avatarSeed,
-        initialBuyInBB: 150,
+        initialBuyInBB: store.settings.initialBuyInBB,
         rebuys: [],
         cashOutBB: ""
       }))
@@ -514,7 +566,7 @@ function App() {
     setShowComposer(false);
   }
 
-  function addRebuy(gameId: string, playerId: string, amountBB: 75 | 150) {
+  function addRebuy(gameId: string, playerId: string, amountBB: number) {
     commitStore({
       ...store,
       games: store.games.map((game) =>
@@ -542,9 +594,10 @@ function App() {
     });
   }
 
-  function updateCashOut(gameId: string, playerId: string, value: string) {
-    const nextValue = value === "" ? "" : Math.max(0, Math.floor(Number(value)));
-    if (Number.isNaN(nextValue as number)) return;
+  function updateCashOutAmount(gameId: string, playerId: string, value: string) {
+    const nextAmount = value.trim() === "" ? "" : Number(value);
+    if (nextAmount !== "" && (!Number.isFinite(nextAmount) || nextAmount < 0)) return;
+    const nextBB = nextAmount === "" ? "" : nextAmount / CASH_PER_BB;
 
     commitStore({
       ...store,
@@ -553,7 +606,7 @@ function App() {
           ? {
               ...game,
               entries: game.entries.map((entry) =>
-                entry.playerId === playerId ? { ...entry, cashOutBB: nextValue } : entry
+                entry.playerId === playerId ? { ...entry, cashOutAmount: nextAmount, cashOutBB: nextBB } : entry
               )
             }
           : game
@@ -642,7 +695,10 @@ function App() {
           </button>
         </nav>
 
-        <button className="settings-button">
+        <button
+          className={`settings-button ${activeView === "settings" ? "active" : ""}`}
+          onClick={() => setActiveView("settings")}
+        >
           <Settings size={24} />
           设置
         </button>
@@ -748,7 +804,7 @@ function App() {
             <div className="composer-header">
               <div>
                 <h2>新牌局</h2>
-                <p>选择入局玩家，系统会自动记录每人 150 BB 初始买入。</p>
+                <p>选择入局玩家，系统会自动记录每人 {store.settings.initialBuyInBB} BB 初始买入。</p>
               </div>
               <button className="ghost-button" onClick={() => setShowComposer(false)}>
                 收起
@@ -763,22 +819,6 @@ function App() {
                     {manageTags ? "完成" : "管理"}
                   </button>
                 </div>
-                <label className="tag-add-inline">
-                  <input
-                    value={newGameTag}
-                    onChange={(event) => setNewGameTag(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        addTagToLibrary(newGameTag);
-                      }
-                    }}
-                    placeholder="新增标签"
-                  />
-                  <button type="button" onClick={() => addTagToLibrary(newGameTag)}>
-                    添加
-                  </button>
-                </label>
               </div>
               <div className="tag-picker">
                 {store.tags.length ? (
@@ -795,6 +835,22 @@ function App() {
                 ) : (
                   <span className="tag-empty">暂无标签，可直接新增</span>
                 )}
+                {!manageTags ? (
+                  <input
+                    className="tag-inline-input"
+                    style={{ width: `${Math.max(112, Math.min(220, newGameTag.length * 12 + 92))}px` }}
+                    value={newGameTag}
+                    onChange={(event) => setNewGameTag(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addTagToLibrary(newGameTag);
+                      }
+                    }}
+                    onBlur={() => addTagToLibrary(newGameTag)}
+                    placeholder="新增标签"
+                  />
+                ) : null}
               </div>
             </div>
 
@@ -885,9 +941,9 @@ function App() {
                     <span>玩家</span>
                     <span>入局筹码</span>
                     <span>补筹记录</span>
+                    <span>离场金额</span>
                     <span>离场筹码</span>
                     <span>输/赢 (BB)</span>
-                    <span>结果</span>
                   </div>
 
                   {game.entries.map((entry) => {
@@ -899,27 +955,39 @@ function App() {
                           <Avatar player={entryPlayer} name={entryPlayer?.name ?? entry.playerName} />
                           {entryPlayer?.name ?? entry.playerName}
                         </span>
-                        <span>150 BB</span>
+                        <span>{entry.initialBuyInBB} BB</span>
                         <span className="rebuy-cell">
                           <span>{formatRebuys(entry.rebuys)}</span>
                           <span className="rebuy-actions">
-                            <button onClick={() => addRebuy(game.id, entry.playerId, 150)}>+150</button>
-                            <button onClick={() => addRebuy(game.id, entry.playerId, 75)}>+75</button>
+                            {store.settings.rebuyOptionsBB.map((amount) => (
+                              <button key={amount} onClick={() => addRebuy(game.id, entry.playerId, amount)}>
+                                +{amount}
+                              </button>
+                            ))}
                           </span>
                         </span>
                         <span>
                           <input
-                            className="cash-input"
+                            className="cash-input cash-amount-input"
                             type="number"
                             min="0"
-                            value={entry.cashOutBB}
-                            onChange={(event) => updateCashOut(game.id, entry.playerId, event.target.value)}
+                            step="1000"
+                            value={getCashOutAmount(entry)}
+                            onChange={(event) => updateCashOutAmount(game.id, entry.playerId, event.target.value)}
                             placeholder="0"
                           />
-                          <em>BB</em>
+                        </span>
+                        <span className="cash-bb-value">
+                          {entry.cashOutBB === "" ? (
+                            <span className="muted">未结算</span>
+                          ) : (
+                            <>
+                              {formatNumber(entry.cashOutBB)}
+                              <em>BB</em>
+                            </>
+                          )}
                         </span>
                         <Profit value={profit} withUnit />
-                        <Profit value={profit} />
                       </div>
                     );
                   })}
@@ -963,7 +1031,7 @@ function App() {
           </footer>
         </section>
           </>
-        ) : (
+        ) : activeView === "players" ? (
           <section className="players-view">
             <header className="page-header players-header">
               <div>
@@ -1022,6 +1090,78 @@ function App() {
                   </article>
                 );
               })}
+            </div>
+          </section>
+        ) : (
+          <section className="settings-view">
+            <header className="page-header settings-header">
+              <div>
+                <h1>设置</h1>
+                <p>配置牌局功能及参数</p>
+              </div>
+            </header>
+
+            <div className="settings-grid">
+              <article className="settings-card">
+                <div>
+                  <h2>初始带入</h2>
+                  <p>新建牌局时，每位玩家默认带入的 BB 数量。</p>
+                </div>
+                <label className="settings-field">
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={store.settings.initialBuyInBB}
+                    onChange={(event) => updateSettingsField("initialBuyInBB", event.target.value)}
+                    onBlur={(event) => {
+                      if (!normalizeBBValue(event.target.value, 0)) {
+                        event.currentTarget.value = String(store.settings.initialBuyInBB);
+                      }
+                    }}
+                  />
+                  <span>BB</span>
+                </label>
+              </article>
+
+              <article className="settings-card">
+                <div>
+                  <h2>补筹档位</h2>
+                  <p>牌局详情里显示的两个补筹按钮，修改后只影响之后新增的补筹。</p>
+                </div>
+                <div className="settings-pair">
+                  <label className="settings-field">
+                    <input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      value={store.settings.rebuyOptionsBB[0]}
+                      onChange={(event) => updateSettingsField("rebuyOption0", event.target.value)}
+                      onBlur={(event) => {
+                        if (!normalizeBBValue(event.target.value, 0)) {
+                          event.currentTarget.value = String(store.settings.rebuyOptionsBB[0]);
+                        }
+                      }}
+                    />
+                    <span>BB</span>
+                  </label>
+                  <label className="settings-field">
+                    <input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      value={store.settings.rebuyOptionsBB[1]}
+                      onChange={(event) => updateSettingsField("rebuyOption1", event.target.value)}
+                      onBlur={(event) => {
+                        if (!normalizeBBValue(event.target.value, 0)) {
+                          event.currentTarget.value = String(store.settings.rebuyOptionsBB[1]);
+                        }
+                      }}
+                    />
+                    <span>BB</span>
+                  </label>
+                </div>
+              </article>
             </div>
           </section>
         )}
@@ -1208,6 +1348,16 @@ function getEntryProfit(entry: GameEntry): number | null {
   return Number(entry.cashOutBB) - entry.initialBuyInBB - entry.rebuys.reduce((sum, rebuy) => sum + rebuy.amountBB, 0);
 }
 
+function getCashOutAmount(entry: GameEntry): number | "" {
+  if (entry.cashOutAmount !== undefined && entry.cashOutAmount !== "") return entry.cashOutAmount;
+  if (entry.cashOutBB === "") return "";
+  return Number(entry.cashOutBB) * CASH_PER_BB;
+}
+
+function formatNumber(value: number) {
+  return value.toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+}
+
 function isInTimeFilter(startedAt: string, filter: TimeFilter) {
   if (filter === "all") return true;
 
@@ -1275,10 +1425,12 @@ function buildPlayerStats(games: Game[], playerId: string, range: "all" | "30" |
   };
 }
 
-function buildDistribution(games: Game[]) {
-  const profits = games.flatMap((game) =>
-    game.entries.map((entry) => getEntryProfit(entry)).filter((profit): profit is number => profit !== null)
-  );
+function buildDistribution(games: Game[], playerId: string) {
+  const profits = games
+    .map((game) => game.entries.find((entry) => entry.playerId === playerId))
+    .filter((entry): entry is GameEntry => Boolean(entry))
+    .map((entry) => getEntryProfit(entry))
+    .filter((profit): profit is number => profit !== null);
   const win = profits.filter((value) => value > 0).length;
   const loss = profits.filter((value) => value < 0).length;
   const draw = profits.filter((value) => value === 0).length;
