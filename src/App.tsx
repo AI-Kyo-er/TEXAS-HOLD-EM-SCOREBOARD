@@ -73,6 +73,7 @@ const red = "#ff3148";
 const neutral = "#97a3ad";
 const DESIGN_WIDTH = 1440;
 const DESIGN_HEIGHT = 810;
+const GAMES_PER_PAGE = 8;
 
 const demoPlayers: Player[] = [
   makePlayer("p-tony", "Tony", "10001", 1),
@@ -194,6 +195,7 @@ function App() {
   const [expandedGameId, setExpandedGameId] = useState(store.games[0]?.id ?? "");
   const [selectedPlayerId, setSelectedPlayerId] = useState(store.players[0]?.id ?? "");
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [showComposer, setShowComposer] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [gameNote, setGameNote] = useState("周末常规局");
@@ -223,6 +225,22 @@ function App() {
       .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
   }, [store.games, searchTerm]);
 
+  const totalPages = Math.max(1, Math.ceil(games.length / GAMES_PER_PAGE));
+  const currentPageGames = useMemo(() => {
+    const start = (currentPage - 1) * GAMES_PER_PAGE;
+    return games.slice(start, start + GAMES_PER_PAGE);
+  }, [currentPage, games]);
+  const visibleGames = useMemo(() => {
+    const expandedIndex = currentPageGames.findIndex((game) => game.id === expandedGameId);
+    if (expandedIndex === -1) {
+      return currentPageGames;
+    }
+
+    return currentPageGames.slice(expandedIndex, expandedIndex + 3);
+  }, [currentPageGames, expandedGameId]);
+  const hasExpandedVisibleGame = visibleGames.some((game) => game.id === expandedGameId);
+  const paginationItems = useMemo(() => getPaginationItems(currentPage, totalPages), [currentPage, totalPages]);
+
   const selectedPlayer = store.players.find((player) => player.id === selectedPlayerId) ?? store.players[0];
 
   const playerStats = useMemo(() => {
@@ -230,6 +248,14 @@ function App() {
   }, [store.games, selectedPlayer?.id, range]);
 
   const distribution = useMemo(() => buildDistribution(store.games), [store.games]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   function commitStore(next: Store) {
     setStore(next);
@@ -284,6 +310,7 @@ function App() {
       games: [game, ...store.games]
     });
     setExpandedGameId(game.id);
+    setCurrentPage(1);
     setShowComposer(false);
   }
 
@@ -503,8 +530,9 @@ function App() {
             <span>操作</span>
           </div>
 
-          {games.map((game) => (
-            <article key={game.id} className="game-row">
+          <div className={`game-list ${hasExpandedVisibleGame ? "has-expanded" : ""}`}>
+            {visibleGames.map((game) => (
+              <article key={game.id} className="game-row">
               <button
                 className="summary-row"
                 onClick={() => setExpandedGameId(expandedGameId === game.id ? "" : game.id)}
@@ -564,17 +592,40 @@ function App() {
                   })}
                 </div>
               ) : null}
-            </article>
-          ))}
+              </article>
+            ))}
+
+            {visibleGames.length === 0 ? <div className="empty-row">暂无匹配牌局</div> : null}
+          </div>
 
           <footer className="pagination">
-            <ChevronLeft size={19} />
-            <button className="active">1</button>
-            <button>2</button>
-            <button>3</button>
-            <span>...</span>
-            <button>8</button>
-            <ChevronRight size={19} />
+            <button
+              className="page-arrow"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            >
+              <ChevronLeft size={19} />
+            </button>
+            {paginationItems.map((item, index) =>
+              item === "..." ? (
+                <span key={`ellipsis-${index}`}>...</span>
+              ) : (
+                <button
+                  key={item}
+                  className={item === currentPage ? "active" : ""}
+                  onClick={() => setCurrentPage(item)}
+                >
+                  {item}
+                </button>
+              )
+            )}
+            <button
+              className="page-arrow"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            >
+              <ChevronRight size={19} />
+            </button>
           </footer>
         </section>
           </main>
@@ -796,6 +847,22 @@ function buildDistribution(games: Game[]) {
       { name: "平局", value: draw, color: "#9aa4ad" }
     ]
   };
+}
+
+function getPaginationItems(currentPage: number, totalPages: number): Array<number | "..."> {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  if (currentPage <= 3) {
+    return [1, 2, 3, "...", totalPages];
+  }
+
+  if (currentPage >= totalPages - 2) {
+    return [1, "...", totalPages - 2, totalPages - 1, totalPages];
+  }
+
+  return [1, "...", currentPage, "...", totalPages];
 }
 
 function makeGameId(date: Date, index: number) {
