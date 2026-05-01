@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ChevronUp,
   CircleUserRound,
+  RefreshCw,
   Filter,
   Grid2X2,
   LayoutList,
@@ -13,6 +14,7 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
+  Trash2,
   Trophy,
   UsersRound
 } from "lucide-react";
@@ -34,7 +36,8 @@ type Player = {
   id: string;
   name: string;
   code: string;
-  avatarSeed: number;
+  avatarStyle: string;
+  avatarSeed: string;
   createdAt: string;
 };
 
@@ -48,7 +51,7 @@ type GameEntry = {
   playerId: string;
   playerName: string;
   playerCode: string;
-  avatarSeed: number;
+  avatarSeed?: number | string;
   initialBuyInBB: 150;
   rebuys: Rebuy[];
   cashOutBB: number | "";
@@ -74,6 +77,7 @@ const neutral = "#97a3ad";
 const DESIGN_WIDTH = 1440;
 const DESIGN_HEIGHT = 810;
 const GAMES_PER_PAGE = 8;
+const AVATAR_STYLES = ["croodles", "lorelei-neutral", "notionists"];
 
 const demoPlayers: Player[] = [
   makePlayer("p-tony", "Tony", "10001", 1),
@@ -136,7 +140,8 @@ function makePlayer(id: string, name: string, code: string, avatarSeed: number):
     id,
     name,
     code,
-    avatarSeed,
+    avatarStyle: AVATAR_STYLES[(avatarSeed - 1) % AVATAR_STYLES.length],
+    avatarSeed: `demo-avatar-${avatarSeed}`,
     createdAt: new Date(2024, 4, avatarSeed).toISOString()
   };
 }
@@ -172,6 +177,30 @@ function makeDemoGame(
   };
 }
 
+function normalizePlayer(player: Partial<Player> & { avatarSeed?: string | number }, index: number): Player {
+  const name = player.name?.trim() || `Player ${index + 1}`;
+  const legacySeed = player.avatarSeed ?? `${name}-${index + 1}`;
+
+  return {
+    id: player.id || `p-${Date.now()}-${index}`,
+    name,
+    code: player.code || String(10000 + index + 1),
+    avatarStyle: AVATAR_STYLES.includes(player.avatarStyle || "")
+      ? player.avatarStyle || AVATAR_STYLES[index % AVATAR_STYLES.length]
+      : AVATAR_STYLES[index % AVATAR_STYLES.length],
+    avatarSeed: String(legacySeed),
+    createdAt: player.createdAt || new Date().toISOString()
+  };
+}
+
+function normalizeStore(store: Store): Store {
+  const players = store.players.map((player, index) => normalizePlayer(player, index));
+  return {
+    players,
+    games: store.games
+  };
+}
+
 function loadStore(): Store {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
@@ -183,7 +212,7 @@ function loadStore(): Store {
     if (!Array.isArray(parsed.players) || !Array.isArray(parsed.games)) {
       return { players: demoPlayers, games: demoGames };
     }
-    return parsed;
+    return normalizeStore(parsed);
   } catch {
     return { players: demoPlayers, games: demoGames };
   }
@@ -192,6 +221,7 @@ function loadStore(): Store {
 function App() {
   const [store, setStore] = useState<Store>(loadStore);
   const [viewportScale, setViewportScale] = useState(1);
+  const [activeView, setActiveView] = useState<"games" | "players">("games");
   const [expandedGameId, setExpandedGameId] = useState(store.games[0]?.id ?? "");
   const [selectedPlayerId, setSelectedPlayerId] = useState(store.players[0]?.id ?? "");
   const [searchTerm, setSearchTerm] = useState("");
@@ -243,6 +273,7 @@ function App() {
   }, [store.games, selectedPlayer?.id, range]);
 
   const distribution = useMemo(() => buildDistribution(store.games), [store.games]);
+  const playerById = useMemo(() => new Map(store.players.map((player) => [player.id, player])), [store.players]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -256,16 +287,25 @@ function App() {
     setStore(next);
   }
 
+  function makeRandomAvatar() {
+    const entropy = `avatar-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return {
+      avatarStyle: AVATAR_STYLES[Math.floor(Math.random() * AVATAR_STYLES.length)],
+      avatarSeed: entropy
+    };
+  }
+
   function addPlayer() {
     const name = newPlayerName.trim();
     if (!name) return;
 
     const id = `p-${Date.now()}`;
+    const avatar = makeRandomAvatar();
     const player: Player = {
       id,
       name,
       code: String(10000 + store.players.length + 1),
-      avatarSeed: store.players.length + 1,
+      ...avatar,
       createdAt: new Date().toISOString()
     };
 
@@ -276,6 +316,56 @@ function App() {
     setSelectedIds((current) => [...current, id]);
     setSelectedPlayerId(id);
     setNewPlayerName("");
+  }
+
+  function updatePlayerName(playerId: string, name: string) {
+    const nextName = name.trimStart();
+    commitStore({
+      ...store,
+      players: store.players.map((player) => (player.id === playerId ? { ...player, name: nextName } : player))
+    });
+  }
+
+  function randomizePlayerAvatar(playerId: string) {
+    const player = store.players.find((item) => item.id === playerId);
+    if (!player) return;
+
+    commitStore({
+      ...store,
+      players: store.players.map((item) =>
+        item.id === playerId ? { ...item, ...makeRandomAvatar() } : item
+      )
+    });
+  }
+
+  function getPlayerUsage(playerId: string) {
+    return store.games.reduce(
+      (usage, game) => {
+        const entry = game.entries.find((item) => item.playerId === playerId);
+        if (!entry) return usage;
+        const profit = getEntryProfit(entry);
+        return {
+          games: usage.games + 1,
+          profit: usage.profit + (profit ?? 0),
+          rebuys: usage.rebuys + entry.rebuys.length
+        };
+      },
+      { games: 0, profit: 0, rebuys: 0 }
+    );
+  }
+
+  function deletePlayer(playerId: string) {
+    if (getPlayerUsage(playerId).games > 0) return;
+
+    const players = store.players.filter((player) => player.id !== playerId);
+    commitStore({
+      ...store,
+      players
+    });
+    setSelectedIds((current) => current.filter((id) => id !== playerId));
+    if (selectedPlayerId === playerId) {
+      setSelectedPlayerId(players[0]?.id ?? "");
+    }
   }
 
   function createGame() {
@@ -381,20 +471,23 @@ function App() {
           <div className="brand-subtitle">TRACKER</div>
         </div>
 
-        <button className="new-game-button" onClick={() => setShowComposer(true)}>
+        <button className="new-game-button" onClick={() => {
+          setActiveView("games");
+          setShowComposer(true);
+        }}>
           <Plus size={22} />
           新牌局
         </button>
 
         <nav className="nav-list">
-          <a className="nav-item active">
+          <button className={`nav-item ${activeView === "games" ? "active" : ""}`} onClick={() => setActiveView("games")}>
             <LayoutList size={21} />
             牌局记录
-          </a>
-          <a className="nav-item">
+          </button>
+          <button className={`nav-item ${activeView === "players" ? "active" : ""}`} onClick={() => setActiveView("players")}>
             <CircleUserRound size={22} />
             玩家
-          </a>
+          </button>
         </nav>
 
         <button className="settings-button">
@@ -404,6 +497,8 @@ function App() {
           </aside>
 
           <main className="main-panel">
+        {activeView === "games" ? (
+          <>
         <header className="page-header">
           <div>
             <h1>牌局记录</h1>
@@ -490,7 +585,7 @@ function App() {
                   className={`player-chip ${selectedIds.includes(player.id) ? "selected" : ""}`}
                   onClick={() => toggleSelected(player.id)}
                 >
-                  <Avatar seed={player.avatarSeed} name={player.name} />
+                  <Avatar player={player} />
                   {player.name}
                 </button>
               ))}
@@ -555,11 +650,12 @@ function App() {
 
                   {game.entries.map((entry) => {
                     const profit = getEntryProfit(entry);
+                    const entryPlayer = playerById.get(entry.playerId);
                     return (
                       <div key={entry.playerId} className="details-row">
                         <span className="player-cell">
-                          <Avatar seed={entry.avatarSeed} name={entry.playerName} />
-                          {entry.playerName}
+                          <Avatar player={entryPlayer} name={entryPlayer?.name ?? entry.playerName} />
+                          {entryPlayer?.name ?? entry.playerName}
                         </span>
                         <span>150 BB</span>
                         <span className="rebuy-cell">
@@ -623,6 +719,69 @@ function App() {
             </button>
           </footer>
         </section>
+          </>
+        ) : (
+          <section className="players-view">
+            <header className="page-header players-header">
+              <div>
+                <h1>玩家管理</h1>
+                <p>管理玩家姓名和头像</p>
+              </div>
+              <div className="players-add-inline">
+                <input
+                  value={newPlayerName}
+                  onChange={(event) => setNewPlayerName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") addPlayer();
+                  }}
+                  placeholder="添加新玩家姓名"
+                />
+                <button className="primary-button" onClick={addPlayer}>
+                  添加玩家
+                </button>
+              </div>
+            </header>
+
+            <div className="players-management-grid">
+              {store.players.map((player) => {
+                const canDelete = getPlayerUsage(player.id).games === 0;
+                return (
+                  <article key={player.id} className="management-card">
+                    <div className="management-card-main">
+                      <Avatar player={player} large />
+                      <div className="management-fields">
+                        <input
+                          value={player.name}
+                          onChange={(event) => updatePlayerName(player.id, event.target.value)}
+                          onBlur={(event) => {
+                            if (!event.target.value.trim()) updatePlayerName(player.id, "未命名玩家");
+                          }}
+                        />
+                        <span>ID: {player.code}</span>
+                      </div>
+                    </div>
+
+                    <div className="management-actions">
+                      <button className="secondary-button" onClick={() => randomizePlayerAvatar(player.id)}>
+                        <RefreshCw size={16} />
+                        换头像
+                      </button>
+                      <button
+                        className="danger-button"
+                        disabled={!canDelete}
+                        title={canDelete ? "删除玩家" : "已有历史牌局的玩家不能删除"}
+                        onClick={() => deletePlayer(player.id)}
+                      >
+                        <Trash2 size={16} />
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
           </main>
 
           <aside className="stats-panel">
@@ -643,7 +802,7 @@ function App() {
 
           {selectedPlayer ? (
             <div className="profile-line">
-              <Avatar seed={selectedPlayer.avatarSeed} name={selectedPlayer.name} large />
+              <Avatar player={selectedPlayer} large />
               <div>
                 <strong>{selectedPlayer.name}</strong>
                 <span>ID: {selectedPlayer.code}</span>
@@ -755,11 +914,33 @@ function App() {
   );
 }
 
-function Avatar({ seed, name, large = false }: { seed: number; name: string; large?: boolean }) {
-  const initials = name.slice(0, 2).toUpperCase();
+function Avatar({
+  player,
+  name,
+  large = false
+}: {
+  player?: Pick<Player, "name" | "avatarStyle" | "avatarSeed">;
+  name?: string;
+  large?: boolean;
+}) {
+  const displayName = player?.name || name || "?";
+  const [failed, setFailed] = useState(false);
+  const style = AVATAR_STYLES.includes(player?.avatarStyle || "") ? player?.avatarStyle : AVATAR_STYLES[0];
+  const seed = encodeURIComponent(player?.avatarSeed || displayName);
+  const avatarUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${seed}`;
+
+  useEffect(() => {
+    setFailed(false);
+  }, [avatarUrl]);
+
   return (
-    <span className={`avatar avatar-${(seed % 6) + 1} ${large ? "large" : ""}`}>
-      <span>{initials}</span>
+    <span className={`avatar ${large ? "large" : ""}`}>
+      {player && !failed ? <img src={avatarUrl} alt="" onError={() => setFailed(true)} /> : null}
+      {(!player || failed) && (
+        <span className="avatar-fallback" aria-label={displayName}>
+          <CircleUserRound size={large ? 29 : 21} strokeWidth={1.8} />
+        </span>
+      )}
     </span>
   );
 }
