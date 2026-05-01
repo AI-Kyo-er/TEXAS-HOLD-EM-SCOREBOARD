@@ -72,6 +72,7 @@ type Game = {
   startedAt: string;
   durationMinutes?: number;
   note?: string;
+  cashPerBB: number;
   tags: string[];
   entries: GameEntry[];
   hiddenAt?: string;
@@ -90,6 +91,7 @@ type FilterMenu = "time" | "tags" | null;
 type AppSettings = {
   initialBuyInBB: number;
   rebuyOptionsBB: [number, number];
+  cashPerBB: number;
 };
 
 const STORAGE_KEY = "poker-tracker-store-v1";
@@ -100,10 +102,10 @@ const DESIGN_WIDTH = 1440;
 const DESIGN_HEIGHT = 810;
 const TITLEBAR_HEIGHT = 40;
 const GAMES_PER_PAGE = 8;
-const CASH_PER_BB = 2000;
 const DEFAULT_SETTINGS: AppSettings = {
   initialBuyInBB: 150,
-  rebuyOptionsBB: [150, 75]
+  rebuyOptionsBB: [150, 75],
+  cashPerBB: 2000
 };
 const AVATAR_STYLES = ["croodles", "lorelei-neutral", "notionists"];
 const TIME_FILTER_OPTIONS: Array<{ key: TimeFilter; label: string }> = [
@@ -196,6 +198,7 @@ function makeDemoGame(
     startedAt,
     durationMinutes,
     note,
+    cashPerBB: DEFAULT_SETTINGS.cashPerBB,
     tags: normalizeTags(note === "-" ? [] : [note]),
     entries: rows.map(([playerId, cashOutBB, rebuys]) => {
       const player = demoPlayers.find((item) => item.id === playerId)!;
@@ -239,6 +242,7 @@ function normalizeGame(game: Partial<Game> & { note?: string }, index: number): 
     startedAt: game.startedAt || new Date().toISOString(),
     durationMinutes: game.durationMinutes,
     note: game.note,
+    cashPerBB: normalizeCashValue(game.cashPerBB, DEFAULT_SETTINGS.cashPerBB),
     tags: normalizeTags(hasTagsField ? game.tags : legacyTag),
     entries: Array.isArray(game.entries) ? game.entries : [],
     hiddenAt: game.hiddenAt
@@ -256,13 +260,20 @@ function normalizeBBValue(value: unknown, fallback: number, allowZero = false) {
   return Math.round(numberValue * 2) / 2;
 }
 
+function normalizeCashValue(value: unknown, fallback: number) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue) || numberValue <= 0) return fallback;
+  return Math.round(numberValue * 100) / 100;
+}
+
 function normalizeSettings(settings?: Partial<AppSettings>): AppSettings {
   return {
     initialBuyInBB: normalizeBBValue(settings?.initialBuyInBB, DEFAULT_SETTINGS.initialBuyInBB),
     rebuyOptionsBB: [
       normalizeBBValue(settings?.rebuyOptionsBB?.[0], DEFAULT_SETTINGS.rebuyOptionsBB[0]),
       normalizeBBValue(settings?.rebuyOptionsBB?.[1], DEFAULT_SETTINGS.rebuyOptionsBB[1])
-    ]
+    ],
+    cashPerBB: normalizeCashValue(settings?.cashPerBB, DEFAULT_SETTINGS.cashPerBB)
   };
 }
 
@@ -324,6 +335,7 @@ function App() {
   const [selectedGameTags, setSelectedGameTags] = useState<string[]>(store.tags.slice(0, 1));
   const [selectedIds, setSelectedIds] = useState<string[]>(store.players.slice(0, 6).map((player) => player.id));
   const [range, setRange] = useState<"all" | "30" | "90" | "custom">("all");
+  const [playerMenuOpen, setPlayerMenuOpen] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
   const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
   const [confirmHideGames, setConfirmHideGames] = useState(false);
@@ -524,13 +536,15 @@ function App() {
     setSelectedFilterTags((current) => current.filter((item) => item !== tag));
   }
 
-  function updateSettingsField(field: "initialBuyInBB" | "rebuyOption0" | "rebuyOption1", value: string) {
-    const nextValue = normalizeBBValue(value, 0);
+  function updateSettingsField(field: "initialBuyInBB" | "rebuyOption0" | "rebuyOption1" | "cashPerBB", value: string) {
+    const nextValue = field === "cashPerBB" ? normalizeCashValue(value, 0) : normalizeBBValue(value, 0);
     if (!nextValue) return;
 
     const nextSettings: AppSettings =
       field === "initialBuyInBB"
         ? { ...store.settings, initialBuyInBB: nextValue }
+        : field === "cashPerBB"
+          ? { ...store.settings, cashPerBB: nextValue }
         : {
             ...store.settings,
             rebuyOptionsBB:
@@ -553,6 +567,7 @@ function App() {
     const game: Game = {
       id: makeGameId(now, store.games.length + 1),
       startedAt: now.toISOString(),
+      cashPerBB: store.settings.cashPerBB,
       tags: selectedGameTags,
       entries: selectedPlayers.map((player) => ({
         playerId: player.id,
@@ -605,7 +620,6 @@ function App() {
   function updateCashOutAmount(gameId: string, playerId: string, value: string) {
     const nextAmount = value.trim() === "" ? "" : Number(value);
     if (nextAmount !== "" && (!Number.isFinite(nextAmount) || nextAmount < 0)) return;
-    const nextBB = nextAmount === "" ? "" : nextAmount / CASH_PER_BB;
 
     commitStore({
       ...store,
@@ -614,11 +628,47 @@ function App() {
           ? {
               ...game,
               entries: game.entries.map((entry) =>
-                entry.playerId === playerId ? { ...entry, cashOutAmount: nextAmount, cashOutBB: nextBB } : entry
+                entry.playerId === playerId
+                  ? {
+                      ...entry,
+                      cashOutAmount: nextAmount,
+                      cashOutBB: nextAmount === "" ? "" : nextAmount / game.cashPerBB
+                    }
+                  : entry
               )
             }
           : game
       )
+    });
+  }
+
+  function updateGameCashPerBB(gameId: string, value: string) {
+    const nextCashPerBB = normalizeCashValue(value, 0);
+    if (!nextCashPerBB) return;
+
+    commitStore({
+      ...store,
+      games: store.games.map((game) => {
+        if (game.id !== gameId) return game;
+        const previousCashPerBB = game.cashPerBB || DEFAULT_SETTINGS.cashPerBB;
+        return {
+          ...game,
+          cashPerBB: nextCashPerBB,
+          entries: game.entries.map((entry) => {
+            const cashOutAmount =
+              entry.cashOutAmount !== undefined && entry.cashOutAmount !== ""
+                ? entry.cashOutAmount
+                : entry.cashOutBB === ""
+                  ? ""
+                  : Number(entry.cashOutBB) * previousCashPerBB;
+            return {
+              ...entry,
+              cashOutAmount,
+              cashOutBB: cashOutAmount === "" ? "" : cashOutAmount / nextCashPerBB
+            };
+          })
+        };
+      })
     });
   }
 
@@ -970,6 +1020,23 @@ function App() {
 
               {!deleteMode && expandedGameId === game.id ? (
                 <div className="details-table">
+                  <div className="details-config">
+                    <span>本局 1 BB 金额</span>
+                    <label className="details-cash-rate">
+                      <input
+                        type="number"
+                        min="1"
+                        step="100"
+                        value={game.cashPerBB}
+                        onChange={(event) => updateGameCashPerBB(game.id, event.target.value)}
+                        onBlur={(event) => {
+                          if (!normalizeCashValue(event.target.value, 0)) {
+                            event.currentTarget.value = String(game.cashPerBB);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
                   <div className="details-head">
                     <span>玩家</span>
                     <span>入局筹码</span>
@@ -1004,8 +1071,8 @@ function App() {
                             className="cash-input cash-amount-input"
                             type="number"
                             min="0"
-                            step="1000"
-                            value={getCashOutAmount(entry)}
+                            step={game.cashPerBB}
+                            value={getCashOutAmount(entry, game.cashPerBB)}
                             onChange={(event) => updateCashOutAmount(game.id, entry.playerId, event.target.value)}
                             placeholder="0"
                           />
@@ -1195,6 +1262,28 @@ function App() {
                   </label>
                 </div>
               </article>
+
+              <article className="settings-card">
+                <div>
+                  <h2>BB 金额</h2>
+                  <p>新建牌局默认使用的 1 BB 对应金额，每场牌局仍可单独修改。</p>
+                </div>
+                <label className="settings-field">
+                  <input
+                    type="number"
+                    min="1"
+                    step="100"
+                    value={store.settings.cashPerBB}
+                    onChange={(event) => updateSettingsField("cashPerBB", event.target.value)}
+                    onBlur={(event) => {
+                      if (!normalizeCashValue(event.target.value, 0)) {
+                        event.currentTarget.value = String(store.settings.cashPerBB);
+                      }
+                    }}
+                  />
+                  <span>金额/BB</span>
+                </label>
+              </article>
             </div>
           </section>
         )}
@@ -1204,16 +1293,45 @@ function App() {
         <section className="stats-card player-card">
           <div className="panel-title">
             <h2>玩家统计</h2>
-            <label className="select-wrap">
-              <select value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(event.target.value)}>
-                {store.players.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
+            <div
+              className={`select-wrap ${playerMenuOpen ? "open" : ""}`}
+              onBlur={(event) => {
+                const nextTarget = event.relatedTarget;
+                if (!(nextTarget instanceof Node && event.currentTarget.contains(nextTarget))) {
+                  setPlayerMenuOpen(false);
+                }
+              }}
+            >
+              <button
+                type="button"
+                className="player-select-button"
+                aria-haspopup="listbox"
+                aria-expanded={playerMenuOpen}
+                onClick={() => setPlayerMenuOpen((open) => !open)}
+              >
+                <span>{selectedPlayer?.name ?? ""}</span>
+              </button>
               <ChevronDown size={16} />
-            </label>
+              {playerMenuOpen ? (
+                <div className="player-options" role="listbox">
+                  {store.players.map((player) => (
+                    <button
+                      key={player.id}
+                      type="button"
+                      role="option"
+                      aria-selected={player.id === selectedPlayerId}
+                      className={player.id === selectedPlayerId ? "active" : ""}
+                      onClick={() => {
+                        setSelectedPlayerId(player.id);
+                        setPlayerMenuOpen(false);
+                      }}
+                    >
+                      {player.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {selectedPlayer ? (
@@ -1382,10 +1500,10 @@ function getEntryProfit(entry: GameEntry): number | null {
   return Number(entry.cashOutBB) - entry.initialBuyInBB - entry.rebuys.reduce((sum, rebuy) => sum + rebuy.amountBB, 0);
 }
 
-function getCashOutAmount(entry: GameEntry): number | "" {
+function getCashOutAmount(entry: GameEntry, cashPerBB: number): number | "" {
   if (entry.cashOutAmount !== undefined && entry.cashOutAmount !== "") return entry.cashOutAmount;
   if (entry.cashOutBB === "") return "";
-  return Number(entry.cashOutBB) * CASH_PER_BB;
+  return Number(entry.cashOutBB) * cashPerBB;
 }
 
 function formatNumber(value: number) {
