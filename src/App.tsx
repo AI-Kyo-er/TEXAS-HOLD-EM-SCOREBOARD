@@ -71,7 +71,7 @@ type Store = {
   tags: string[];
 };
 
-type TimeFilter = "all" | "today" | "7" | "30" | "month";
+type TimeFilter = "today" | "week" | "month" | "all";
 type FilterMenu = "time" | "tags" | null;
 
 const STORAGE_KEY = "poker-tracker-store-v1";
@@ -82,13 +82,15 @@ const DESIGN_WIDTH = 1440;
 const DESIGN_HEIGHT = 810;
 const GAMES_PER_PAGE = 8;
 const AVATAR_STYLES = ["croodles", "lorelei-neutral", "notionists"];
-const TIME_FILTER_LABELS: Record<TimeFilter, string> = {
-  all: "全部时间",
-  today: "今天",
-  "7": "近7天",
-  "30": "近30天",
-  month: "本月"
-};
+const TIME_FILTER_OPTIONS: Array<{ key: TimeFilter; label: string }> = [
+  { key: "today", label: "今天" },
+  { key: "week", label: "本周" },
+  { key: "month", label: "本月" },
+  { key: "all", label: "全部时间" }
+];
+const TIME_FILTER_LABELS = Object.fromEntries(
+  TIME_FILTER_OPTIONS.map((option) => [option.key, option.label])
+) as Record<TimeFilter, string>;
 
 function getViewportScale() {
   if (typeof window === "undefined") return 1;
@@ -676,7 +678,7 @@ function App() {
             </button>
             {openFilterMenu === "time" ? (
               <div className="filter-menu">
-                {(Object.keys(TIME_FILTER_LABELS) as TimeFilter[]).map((key) => (
+                {TIME_FILTER_OPTIONS.map(({ key, label }) => (
                   <button
                     key={key}
                     className={timeFilter === key ? "active" : ""}
@@ -685,7 +687,7 @@ function App() {
                       setOpenFilterMenu(null);
                     }}
                   >
-                    {TIME_FILTER_LABELS[key]}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -1216,12 +1218,19 @@ function isInTimeFilter(startedAt: string, filter: TimeFilter) {
     return date.toDateString() === now.toDateString();
   }
 
+  if (filter === "week") {
+    const startOfWeek = new Date(now);
+    const day = startOfWeek.getDay() || 7;
+    startOfWeek.setHours(0, 0, 0, 0);
+    startOfWeek.setDate(startOfWeek.getDate() - day + 1);
+    return date.getTime() >= startOfWeek.getTime();
+  }
+
   if (filter === "month") {
     return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
   }
 
-  const days = Number(filter);
-  return date.getTime() >= now.getTime() - days * 24 * 60 * 60 * 1000;
+  return true;
 }
 
 function buildPlayerStats(games: Game[], playerId: string, range: "all" | "30" | "90" | "custom") {
