@@ -7,7 +7,6 @@ import {
   ChevronUp,
   CircleUserRound,
   RefreshCw,
-  Grid2X2,
   LayoutList,
   Plus,
   Search,
@@ -59,8 +58,9 @@ type GameEntry = {
 type Game = {
   id: string;
   startedAt: string;
-  durationMinutes: number;
-  note: string;
+  durationMinutes?: number;
+  note?: string;
+  tags: string[];
   entries: GameEntry[];
   hiddenAt?: string;
 };
@@ -68,7 +68,11 @@ type Game = {
 type Store = {
   players: Player[];
   games: Game[];
+  tags: string[];
 };
+
+type TimeFilter = "all" | "today" | "7" | "30" | "month";
+type FilterMenu = "time" | "tags" | null;
 
 const STORAGE_KEY = "poker-tracker-store-v1";
 const green = "#36e24f";
@@ -78,6 +82,13 @@ const DESIGN_WIDTH = 1440;
 const DESIGN_HEIGHT = 810;
 const GAMES_PER_PAGE = 8;
 const AVATAR_STYLES = ["croodles", "lorelei-neutral", "notionists"];
+const TIME_FILTER_LABELS: Record<TimeFilter, string> = {
+  all: "全部时间",
+  today: "今天",
+  "7": "近7天",
+  "30": "近30天",
+  month: "本月"
+};
 
 function getViewportScale() {
   if (typeof window === "undefined") return 1;
@@ -163,6 +174,7 @@ function makeDemoGame(
     startedAt,
     durationMinutes,
     note,
+    tags: normalizeTags(note === "-" ? [] : [note]),
     entries: rows.map(([playerId, cashOutBB, rebuys]) => {
       const player = demoPlayers.find((item) => item.id === playerId)!;
       return {
@@ -182,6 +194,38 @@ function makeDemoGame(
   };
 }
 
+function normalizeTag(tag: string) {
+  return tag.trim().replace(/\s+/g, " ");
+}
+
+function normalizeTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  return Array.from(
+    new Set(
+      tags
+        .map((tag) => (typeof tag === "string" ? normalizeTag(tag) : ""))
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeGame(game: Partial<Game> & { note?: string }, index: number): Game {
+  const legacyTag = game.note && game.note !== "-" ? [game.note] : [];
+  return {
+    id: game.id || `#${index + 1}`,
+    startedAt: game.startedAt || new Date().toISOString(),
+    durationMinutes: game.durationMinutes,
+    note: game.note,
+    tags: normalizeTags(game.tags?.length ? game.tags : legacyTag),
+    entries: Array.isArray(game.entries) ? game.entries : [],
+    hiddenAt: game.hiddenAt
+  };
+}
+
+function getStoreTags(games: Game[], tags?: unknown) {
+  return normalizeTags([...(Array.isArray(tags) ? tags : []), ...games.flatMap((game) => game.tags)]);
+}
+
 function normalizePlayer(player: Partial<Player> & { avatarSeed?: string | number }, index: number): Player {
   const name = player.name?.trim() || `Player ${index + 1}`;
   const legacySeed = player.avatarSeed ?? `${name}-${index + 1}`;
@@ -198,28 +242,30 @@ function normalizePlayer(player: Partial<Player> & { avatarSeed?: string | numbe
   };
 }
 
-function normalizeStore(store: Store): Store {
-  const players = store.players.map((player, index) => normalizePlayer(player, index));
+function normalizeStore(store: Partial<Store> & { tags?: unknown }): Store {
+  const players = (store.players || []).map((player, index) => normalizePlayer(player, index));
+  const games = (store.games || []).map((game, index) => normalizeGame(game, index));
   return {
     players,
-    games: store.games
+    games,
+    tags: getStoreTags(games, store.tags)
   };
 }
 
 function loadStore(): Store {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    return { players: demoPlayers, games: demoGames };
+    return normalizeStore({ players: demoPlayers, games: demoGames, tags: [] });
   }
 
   try {
     const parsed = JSON.parse(raw) as Store;
     if (!Array.isArray(parsed.players) || !Array.isArray(parsed.games)) {
-      return { players: demoPlayers, games: demoGames };
+      return normalizeStore({ players: demoPlayers, games: demoGames, tags: [] });
     }
     return normalizeStore(parsed);
   } catch {
-    return { players: demoPlayers, games: demoGames };
+    return normalizeStore({ players: demoPlayers, games: demoGames, tags: [] });
   }
 }
 
@@ -233,14 +279,17 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showComposer, setShowComposer] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState("");
-  const [gameNote, setGameNote] = useState("周末常规局");
-  const [durationHours, setDurationHours] = useState("3");
-  const [durationMinutes, setDurationMinutes] = useState("45");
+  const [newGameTag, setNewGameTag] = useState("");
+  const [selectedGameTags, setSelectedGameTags] = useState<string[]>(store.tags.slice(0, 1));
   const [selectedIds, setSelectedIds] = useState<string[]>(store.players.slice(0, 6).map((player) => player.id));
   const [range, setRange] = useState<"all" | "30" | "90" | "custom">("all");
   const [deleteMode, setDeleteMode] = useState(false);
   const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
   const [confirmHideGames, setConfirmHideGames] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
+  const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
+  const [openFilterMenu, setOpenFilterMenu] = useState<FilterMenu>(null);
+  const [manageTags, setManageTags] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
@@ -261,9 +310,16 @@ function App() {
   const games = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return activeGames
-      .filter((game) => !q || game.id.toLowerCase().includes(q) || game.note.toLowerCase().includes(q))
+      .filter((game) => isInTimeFilter(game.startedAt, timeFilter))
+      .filter((game) => selectedFilterTags.every((tag) => game.tags.includes(tag)))
+      .filter(
+        (game) =>
+          !q ||
+          game.id.toLowerCase().includes(q) ||
+          game.tags.some((tag) => tag.toLowerCase().includes(q))
+      )
       .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  }, [activeGames, searchTerm]);
+  }, [activeGames, searchTerm, selectedFilterTags, timeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(games.length / GAMES_PER_PAGE));
   const currentPageGames = useMemo(() => {
@@ -279,19 +335,19 @@ function App() {
   const selectedPlayer = store.players.find((player) => player.id === selectedPlayerId) ?? store.players[0];
 
   const playerStats = useMemo(() => {
-    return buildPlayerStats(activeGames, selectedPlayer?.id ?? "", range);
-  }, [activeGames, selectedPlayer?.id, range]);
+    return buildPlayerStats(games, selectedPlayer?.id ?? "", range);
+  }, [games, selectedPlayer?.id, range]);
 
-  const distribution = useMemo(() => buildDistribution(activeGames), [activeGames]);
+  const distribution = useMemo(() => buildDistribution(games), [games]);
   const playerById = useMemo(() => new Map(store.players.map((player) => [player.id, player])), [store.players]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, selectedFilterTags, timeFilter]);
 
   useEffect(() => {
     setConfirmHideGames(false);
-  }, [searchTerm, currentPage]);
+  }, [searchTerm, currentPage, selectedFilterTags, timeFilter]);
 
   useEffect(() => {
     if (activeView === "games") return;
@@ -389,17 +445,53 @@ function App() {
     }
   }
 
+  function addTagToLibrary(rawTag: string) {
+    const tag = normalizeTag(rawTag);
+    if (!tag) return;
+
+    const tags = normalizeTags([...store.tags, tag]);
+    commitStore({
+      ...store,
+      tags
+    });
+    setSelectedGameTags((current) => (current.includes(tag) ? current : [...current, tag]));
+    setNewGameTag("");
+  }
+
+  function toggleGameTag(tag: string) {
+    setSelectedGameTags((current) =>
+      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
+    );
+  }
+
+  function toggleFilterTag(tag: string) {
+    setSelectedFilterTags((current) =>
+      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
+    );
+  }
+
+  function deleteTag(tag: string) {
+    commitStore({
+      ...store,
+      tags: store.tags.filter((item) => item !== tag),
+      games: store.games.map((game) => ({
+        ...game,
+        tags: game.tags.filter((item) => item !== tag)
+      }))
+    });
+    setSelectedGameTags((current) => current.filter((item) => item !== tag));
+    setSelectedFilterTags((current) => current.filter((item) => item !== tag));
+  }
+
   function createGame() {
     const selectedPlayers = store.players.filter((player) => selectedIds.includes(player.id));
     if (selectedPlayers.length === 0) return;
 
     const now = new Date();
-    const totalMinutes = Math.max(0, Number(durationHours || 0) * 60 + Number(durationMinutes || 0));
     const game: Game = {
       id: makeGameId(now, store.games.length + 1),
       startedAt: now.toISOString(),
-      durationMinutes: totalMinutes,
-      note: gameNote.trim() || "-",
+      tags: selectedGameTags,
       entries: selectedPlayers.map((player) => ({
         playerId: player.id,
         playerName: player.name,
@@ -566,23 +658,67 @@ function App() {
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="搜索牌局编号或备注"
+              placeholder="搜索牌局编号或标签"
             />
             <Search size={22} />
           </label>
         </header>
 
         <section className="toolbar">
-          <button className="filter-pill">
-            <CalendarDays size={19} />
-            全部时间
-            <ChevronDown size={17} />
-          </button>
-          <button className="filter-pill">
-            <SlidersHorizontal size={19} />
-            所有标签
-            <ChevronDown size={17} />
-          </button>
+          <div className="filter-control">
+            <button
+              className={`filter-pill ${openFilterMenu === "time" || timeFilter !== "all" ? "active" : ""}`}
+              onClick={() => setOpenFilterMenu((current) => (current === "time" ? null : "time"))}
+            >
+              <CalendarDays size={19} />
+              {TIME_FILTER_LABELS[timeFilter]}
+              <ChevronDown size={17} />
+            </button>
+            {openFilterMenu === "time" ? (
+              <div className="filter-menu">
+                {(Object.keys(TIME_FILTER_LABELS) as TimeFilter[]).map((key) => (
+                  <button
+                    key={key}
+                    className={timeFilter === key ? "active" : ""}
+                    onClick={() => {
+                      setTimeFilter(key);
+                      setOpenFilterMenu(null);
+                    }}
+                  >
+                    {TIME_FILTER_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="filter-control">
+            <button
+              className={`filter-pill ${openFilterMenu === "tags" || selectedFilterTags.length ? "active" : ""}`}
+              onClick={() => setOpenFilterMenu((current) => (current === "tags" ? null : "tags"))}
+            >
+              <SlidersHorizontal size={19} />
+              {selectedFilterTags.length ? `${selectedFilterTags.length} 个标签` : "所有标签"}
+              <ChevronDown size={17} />
+            </button>
+            {openFilterMenu === "tags" ? (
+              <div className="filter-menu tag-filter-menu">
+                {store.tags.length ? (
+                  store.tags.map((tag) => (
+                    <button
+                      key={tag}
+                      className={selectedFilterTags.includes(tag) ? "active" : ""}
+                      onClick={() => toggleFilterTag(tag)}
+                    >
+                      <span className={`filter-check ${selectedFilterTags.includes(tag) ? "checked" : ""}`} />
+                      {tag}
+                    </button>
+                  ))
+                ) : (
+                  <span className="filter-empty">暂无标签</span>
+                )}
+              </div>
+            ) : null}
+          </div>
           <div className="toolbar-spacer" />
           {deleteMode ? (
             <>
@@ -617,30 +753,47 @@ function App() {
               </button>
             </div>
 
-            <div className="composer-grid">
-              <label>
-                备注
-                <input value={gameNote} onChange={(event) => setGameNote(event.target.value)} />
-              </label>
-              <label>
-                时长小时
-                <input
-                  type="number"
-                  min="0"
-                  value={durationHours}
-                  onChange={(event) => setDurationHours(event.target.value)}
-                />
-              </label>
-              <label>
-                时长分钟
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={durationMinutes}
-                  onChange={(event) => setDurationMinutes(event.target.value)}
-                />
-              </label>
+            <div className="tag-composer">
+              <div className="tag-composer-head">
+                <div className="tag-title">
+                  <span>标签</span>
+                  <button type="button" onClick={() => setManageTags((current) => !current)}>
+                    {manageTags ? "完成" : "管理"}
+                  </button>
+                </div>
+                <label className="tag-add-inline">
+                  <input
+                    value={newGameTag}
+                    onChange={(event) => setNewGameTag(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addTagToLibrary(newGameTag);
+                      }
+                    }}
+                    placeholder="新增标签"
+                  />
+                  <button type="button" onClick={() => addTagToLibrary(newGameTag)}>
+                    添加
+                  </button>
+                </label>
+              </div>
+              <div className="tag-picker">
+                {store.tags.length ? (
+                  store.tags.map((tag) => (
+                    <button
+                      key={tag}
+                      className={`tag-chip ${selectedGameTags.includes(tag) ? "selected" : ""} ${manageTags ? "manage" : ""}`}
+                      onClick={() => (manageTags ? deleteTag(tag) : toggleGameTag(tag))}
+                    >
+                      {tag}
+                      {manageTags ? <span className="tag-delete-mark">×</span> : null}
+                    </button>
+                  ))
+                ) : (
+                  <span className="tag-empty">暂无标签，可直接新增</span>
+                )}
+              </div>
             </div>
 
             <div className="player-picker">
@@ -679,9 +832,8 @@ function App() {
           <div className="table-head">
             <span>牌局编号</span>
             <span>开始时间</span>
-            <span>时长</span>
+            <span>标签</span>
             <span>玩家数</span>
-            <span>备注</span>
             <span>{deleteMode ? "选择" : "操作"}</span>
           </div>
 
@@ -702,9 +854,18 @@ function App() {
               >
                 <span className="game-id">{game.id}</span>
                 <span>{formatDateTime(game.startedAt)}</span>
-                <span>{formatDuration(game.durationMinutes)}</span>
+                <span className="tag-list">
+                  {game.tags.length ? (
+                    game.tags.map((tag) => (
+                      <span key={tag} className="tag-chip compact">
+                        {tag}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="muted">无标签</span>
+                  )}
+                </span>
                 <span>{game.entries.length}</span>
-                <span>{game.note}</span>
                 <span className="row-action">
                   {deleteMode ? (
                     <span className={`row-checkbox ${selectedForHide ? "checked" : ""}`} aria-hidden="true" />
@@ -909,11 +1070,11 @@ function App() {
 
           <div className="stats-grid">
             <Stat label="总盈利" value={`${formatSigned(playerStats.totalProfit)} BB`} hot />
-            <Stat label="总时长" value={formatTotalDuration(playerStats.totalMinutes)} />
             <Stat label="参与牌局" value={String(playerStats.games)} />
             <Stat label="胜率" value={`${playerStats.winRate.toFixed(1)}%`} />
             <Stat label="平均盈利" value={`${formatSigned(playerStats.avgProfit)} BB/局`} hot />
             <Stat label="最大单局盈利" value={`${formatSigned(playerStats.maxProfit)} BB`} hot />
+            <Stat label="盈利局数" value={String(playerStats.wins)} />
             <Stat label="补筹次数" value={String(playerStats.rebuyCount)} />
             <Stat label="补筹总额" value={`${playerStats.rebuyTotal} BB`} />
           </div>
@@ -1045,6 +1206,24 @@ function getEntryProfit(entry: GameEntry): number | null {
   return Number(entry.cashOutBB) - entry.initialBuyInBB - entry.rebuys.reduce((sum, rebuy) => sum + rebuy.amountBB, 0);
 }
 
+function isInTimeFilter(startedAt: string, filter: TimeFilter) {
+  if (filter === "all") return true;
+
+  const date = new Date(startedAt);
+  const now = new Date();
+
+  if (filter === "today") {
+    return date.toDateString() === now.toDateString();
+  }
+
+  if (filter === "month") {
+    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  }
+
+  const days = Number(filter);
+  return date.getTime() >= now.getTime() - days * 24 * 60 * 60 * 1000;
+}
+
 function buildPlayerStats(games: Game[], playerId: string, range: "all" | "30" | "90" | "custom") {
   const now = new Date();
   const lowerBound =
@@ -1076,8 +1255,8 @@ function buildPlayerStats(games: Game[], playerId: string, range: "all" | "30" |
 
   return {
     totalProfit,
-    totalMinutes: rows.reduce((sum, row) => sum + row.game.durationMinutes, 0),
     games: rows.length,
+    wins,
     winRate: rows.length ? (wins / rows.length) * 100 : 0,
     avgProfit: rows.length ? Math.round(totalProfit / rows.length) : 0,
     maxProfit: rows.length ? Math.max(...rows.map((row) => row.profit)) : 0,

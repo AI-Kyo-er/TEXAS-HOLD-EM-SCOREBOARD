@@ -235,6 +235,11 @@ button {
   flex: 1;
 }
 
+.filter-control {
+  position: relative;
+  flex: 0 0 auto;
+}
+
 .filter-pill,
 .icon-button,
 .ghost-button,
@@ -251,6 +256,74 @@ button {
   background: rgba(13, 24, 33, 0.66);
   cursor: pointer;
   font-size: 14px;
+}
+
+.filter-pill.active {
+  border-color: rgba(54, 226, 79, 0.28);
+  color: #f1f7f4;
+  background: rgba(54, 226, 79, 0.1);
+}
+
+.filter-menu {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(10, 22, 31, 0.98);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+}
+
+.filter-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: #cbd5dc;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.filter-menu button.active {
+  color: var(--green);
+  background: rgba(54, 226, 79, 0.13);
+}
+
+.tag-filter-menu {
+  min-width: 180px;
+  max-height: 230px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.tag-filter-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-check {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(216, 224, 232, 0.38);
+  border-radius: 4px;
+}
+
+.filter-check.checked {
+  border-color: rgba(54, 226, 79, 0.72);
+  background: rgba(54, 226, 79, 0.2);
+}
+
+.filter-empty {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .filter-pill.compact {
@@ -310,6 +383,130 @@ button {
   margin-top: 18px;
 }
 
+.tag-composer {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.tag-composer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tag-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tag-title button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  color: #cbd5dc;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.tag-add-inline {
+  display: flex;
+  align-items: center;
+  width: 260px;
+  height: 40px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(6, 15, 22, 0.42);
+}
+
+.tag-add-inline input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #e7eef4;
+  background: transparent;
+}
+
+.tag-add-inline button {
+  flex: 0 0 58px;
+  height: 32px;
+  border-radius: 7px;
+  color: #dff6e4;
+  background: rgba(54, 226, 79, 0.13);
+  cursor: pointer;
+}
+
+.tag-picker,
+.tag-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 126px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #dce5ed;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-chip.selected {
+  border-color: rgba(54, 226, 79, 0.42);
+  color: #f3fff5;
+  background: var(--green-soft);
+}
+
+.tag-chip.manage {
+  gap: 8px;
+  border-color: rgba(255, 49, 72, 0.28);
+}
+
+.tag-delete-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: #ffd7dc;
+  background: rgba(255, 49, 72, 0.18);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.tag-chip.compact {
+  max-width: 96px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  color: #dce5ed;
+  cursor: default;
+  font-size: 12px;
+}
+
+.tag-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .composer label {
   display: grid;
   gap: 8px;
@@ -324,6 +521,19 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(6, 15, 22, 0.42);
+}
+
+.composer .tag-add-inline {
+  display: flex;
+  gap: 0;
+}
+
+.composer .tag-add-inline input {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .player-picker {
@@ -353,6 +563,12 @@ button {
 
 .add-player-row {
   grid-template-columns: minmax(180px, 1fr) 130px 130px;
+}
+
+.add-player-row .primary-button {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 17px;
 }
 
 .secondary-button {
@@ -542,7 +758,7 @@ button {
 
 .table-head,
 .summary-row {
-  grid-template-columns: 1.12fr 1.1fr 0.62fr 0.72fr 1.1fr 64px;
+  grid-template-columns: 1.12fr 1.1fr 1.52fr 0.72fr 64px;
 }
 
 .table-head {
